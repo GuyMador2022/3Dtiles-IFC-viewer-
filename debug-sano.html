@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sano Data Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #28a745;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Sano Data Debug Tool</h1>
+        <p>בדיקה מפורטת של נגישות קבצי Sano</p>
+
+        <div class="test-section">
+            <h3>📁 בדיקת קבצים בסיסיים</h3>
+            <button onclick="testBasicFiles()">בדוק קבצים בסיסיים</button>
+            <div id="basic-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🏗️ בדיקת קבצי B3DM</h3>
+            <button onclick="testB3DMFiles()">בדוק קבצי B3DM</button>
+            <div class="progress" id="b3dm-progress" style="display: none;">
+                <div class="progress-bar" style="width: 0%"></div>
+            </div>
+            <div id="b3dm-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 ניתוח מבנה נתונים</h3>
+            <button onclick="analyzeStructure()">נתח מבנה</button>
+            <div id="structure-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🚀 בדיקת טעינה מלאה</h3>
+            <button onclick="testFullLoad()">בדיקה מלאה</button>
+            <div id="full-load-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 לוג מפורט</h3>
+            <button onclick="clearLog()">נקה לוג</button>
+            <div id="detailed-log" style="max-height: 300px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        const INPUT_BASE = './input/Sano_3dtiles/';
+        let logElement;
+
+        function log(message, type = 'info') {
+            if (!logElement) logElement = document.getElementById('detailed-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `[${timestamp}] ${message}`;
+            logElement.appendChild(div);
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+
+        window.clearLog = () => {
+            if (logElement) logElement.innerHTML = '';
+        };
+
+        async function checkFileAccess(url) {
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                return {
+                    accessible: response.ok,
+                    status: response.status,
+                    size: response.headers.get('content-length') || 'unknown'
+                };
+            } catch (error) {
+                return {
+                    accessible: false,
+                    error: error.message
+                };
+            }
+        }
+
+        window.testBasicFiles = async () => {
+            const resultsDiv = document.getElementById('basic-results');
+            resultsDiv.innerHTML = '<div class="status info">בודק קבצים בסיסיים...</div>';
+            
+            const files = [
+                'Production_4_3dtiles.json',
+                'metadata.xml',
+                'Data/Tile_1/',
+                'Data/Tile_1/tileset.json'
+            ];
+
+            let results = '';
+            
+            for (const file of files) {
+                log(`בודק קובץ: ${file}`, 'info');
+                const check = await checkFileAccess(INPUT_BASE + file);
+                
+                if (check.accessible) {
+                    results += `<div class="status success">✅ ${file} - נגיש (${check.size} bytes)</div>`;
+                    log(`${file} נגיש`, 'success');
+                } else {
+                    results += `<div class="status error">❌ ${file} - לא נגיש (${check.error || check.status})</div>`;
+                    log(`${file} לא נגיש: ${check.error || check.status}`, 'error');
+                }
+            }
+            
+            resultsDiv.innerHTML = results;
+        };
+
+        window.testB3DMFiles = async () => {
+            const resultsDiv = document.getElementById('b3dm-results');
+            const progressDiv = document.getElementById('b3dm-progress');
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            
+            resultsDiv.innerHTML = '<div class="status info">סורק קבצי B3DM...</div>';
+            progressDiv.style.display = 'block';
+            
+            // Test sample B3DM files from different tiles
+            const sampleFiles = [
+                'Data/Tile_1/0_0.b3dm',
+                'Data/Tile_1/0_1.b3dm',
+                'Data/Tile_2/0_0.b3dm',
+                'Data/Tile_3/0_0.b3dm'
+            ];
+
+            let accessible = 0;
+            let totalSize = 0;
+            
+            for (let i = 0; i < sampleFiles.length; i++) {
+                const file = sampleFiles[i];
+                const progress = ((i + 1) / sampleFiles.length) * 100;
+                progressBar.style.width = `${progress}%`;
+                
+                log(`בודק B3DM: ${file}`, 'info');
+                const check = await checkFileAccess(INPUT_BASE + file);
+                
+                if (check.accessible) {
+                    accessible++;
+                    const size = parseInt(check.size) || 0;
+                    totalSize += size;
+                    log(`${file} נגיש (${size} bytes)`, 'success');
+                } else {
+                    log(`${file} לא נגיש: ${check.error || check.status}`, 'error');
+                }
+            }
+            
+            const avgSize = totalSize > 0 ? Math.round(totalSize / accessible) : 0;
+            const results = `
+                <div class="status ${accessible > 0 ? 'success' : 'error'}">
+                    📊 תוצאות בדיקת B3DM:<br>
+                    • קבצים נגישים: ${accessible}/${sampleFiles.length}<br>
+                    • גודל ממוצע: ${avgSize.toLocaleString()} bytes<br>
+                    • סך כל נבדק: ${totalSize.toLocaleString()} bytes
+                </div>
+            `;
+            
+            resultsDiv.innerHTML = results;
+            setTimeout(() => progressDiv.style.display = 'none', 1000);
+        };
+
+        window.analyzeStructure = async () => {
+            const resultsDiv = document.getElementById('structure-results');
+            resultsDiv.innerHTML = '<div class="status info">מנתח מבנה נתונים...</div>';
+            
+            try {
+                log('קורא tileset ראשי', 'info');
+                
+                // Read main tileset
+                const response = await fetch(INPUT_BASE + 'Production_4_3dtiles.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const tileset = await response.json();
+                log('tileset ראשי נקרא בהצלחה', 'success');
+                
+                const analysis = {
+                    version: tileset.asset?.version || 'unknown',
+                    geometricError: tileset.geometricError || 0,
+                    hasRoot: !!tileset.root,
+                    rootBoundingVolume: tileset.root?.boundingVolume?.sphere ? 'sphere' : 
+                                       tileset.root?.boundingVolume?.box ? 'box' : 'unknown',
+                    rootChildren: tileset.root?.children?.length || 0,
+                    rootContent: !!tileset.root?.content,
+                    rootContentUri: tileset.root?.content?.uri || 'none'
+                };
+                
+                let results = `
+                    <div class="status success">
+                        📋 ניתוח מבנה Tileset:<br>
+                        • גרסה: ${analysis.version}<br>
+                        • Geometric Error: ${analysis.geometricError}<br>
+                        • Bounding Volume: ${analysis.rootBoundingVolume}<br>
+                        • ילדים ברמה ראשית: ${analysis.rootChildren}<br>
+                        • יש תוכן ברמה ראשית: ${analysis.rootContent ? 'כן' : 'לא'}<br>
+                        • URI תוכן: ${analysis.rootContentUri}
+                    </div>
+                `;
+                
+                if (tileset.root?.children) {
+                    log('מנתח ילדים ברמה ראשית', 'info');
+                    results += '<div class="status info"><strong>ילדים ברמה ראשית:</strong><div class="file-list">';
+                    
+                    tileset.root.children.forEach((child, i) => {
+                        const childInfo = `
+                            Child ${i}: 
+                            ${child.content?.uri || 'no content'} 
+                            (error: ${child.geometricError || 0})
+                        `;
+                        results += `<div>${childInfo}</div>`;
+                    });
+                    
+                    results += '</div></div>';
+                }
+                
+                resultsDiv.innerHTML = results;
+                
+            } catch (error) {
+                log(`שגיאה בניתוח: ${error.message}`, 'error');
+                resultsDiv.innerHTML = `<div class="status error">❌ שגיאה בניתוח: ${error.message}</div>`;
+            }
+        };
+
+        window.testFullLoad = async () => {
+            const resultsDiv = document.getElementById('full-load-results');
+            resultsDiv.innerHTML = '<div class="status info">בודק טעינה מלאה...</div>';
+            
+            try {
+                log('מתחיל בדיקת טעינה מלאה', 'info');
+                
+                // Import our loader
+                const { ThreeDTilesLoader } = await import('./UnifiedViewer/src/loaders/ThreeDTilesLoader.js');
+                const { SanoDataLoader } = await import('./UnifiedViewer/src/loaders/SanoDataLoader.js');
+                
+                log('Loaders imported successfully', 'success');
+                
+                // Create mock viewer for testing
+                const mockViewer = {
+                    scene: new THREE.Scene(),
+                    tilesLoader: new ThreeDTilesLoader(),
+                    loadedModels: { tiles: [] },
+                    updateStatus: (msg) => log(`Status: ${msg}`, 'info'),
+                    focusOnModel: (model) => log(`Focus on model: ${model.name}`, 'info')
+                };
+                
+                // Test Sano loader
+                const sanoLoader = new SanoDataLoader();
+                const isAvailable = sanoLoader.checkAvailability();
+                
+                log(`Sano data availability: ${isAvailable}`, isAvailable ? 'success' : 'warning');
+                
+                if (isAvailable) {
+                    // Attempt to load
+                    const model = await sanoLoader.loadSano3DTiles(mockViewer);
+                    log(`Model loaded successfully: ${model.name}`, 'success');
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="status success">
+                            ✅ טעינה מלאה הצליחה!<br>
+                            • מודל נטען: ${model.name}<br>
+                            • אובייקטים: ${model.children.length}<br>
+                            • סוג: ${model.userData.type}
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = '<div class="status warning">⚠️ נתוני Sano לא זמינים</div>';
+                }
+                
+            } catch (error) {
+                log(`שגיאה בטעינה מלאה: ${error.message}`, 'error');
+                resultsDiv.innerHTML = `<div class="status error">❌ שגיאה בטעינה: ${error.message}</div>`;
+            }
+        };
+
+        // Initialize
+        log('Debug tool initialized', 'success');
+        log('Base path: ' + INPUT_BASE, 'info');
+    </script>
+
+    <!-- Three.js for testing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.153.0/three.min.js"></script>
+</body>
+</html>

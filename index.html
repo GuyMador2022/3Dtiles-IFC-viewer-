@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>צופה מאוחד - IFC ו-3D Tiles</title>
+    
+    <!-- FontAwesome from CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tailwind CSS - will be bundled by Vite -->
+    <link rel="stylesheet" href="/src/styles.css">
+
+<style>
+        :root {
+            color-scheme: light;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #1f2933;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(82, 105, 206, 0.25);
+            z-index: 1000;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 300;
+        }
+
+        .mode-selector {
+            background: white;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 999;
+        }
+
+        .mode-btn {
+            padding: 0.5rem 1.5rem;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .mode-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .viewer-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* First Person View Styles */
+        #renderCanvas.fpv-mode {
+            cursor: crosshair;
+        }
+
+        #renderCanvas.fpv-locked {
+            cursor: none;
+        }
+
+        /* FPV Help Modal Styles */
+        .fpv-help-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 998;
+            padding: 1.5rem;
+        }
+
+        .fpv-help-backdrop.active {
+            display: flex;
+        }
+
+        .fpv-help-modal {
+            width: min(620px, 94vw);
+            background: #f8fafc;
+            border-radius: 22px;
+            box-shadow: 0 26px 48px rgba(15, 23, 42, 0.28);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            color: #0f172a;
+            position: relative;
+        }
+
+        .fpv-help-close {
+            position: absolute;
+            top: 1.25rem;
+            left: 1.25rem;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #64748b;
+            cursor: pointer;
+        }
+
+        .fpv-help-title {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-align: center;
+            color: #0f172a;
+        }
+
+        .fpv-help-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 1rem;
+        }
+
+        .fpv-help-card {
+            background: #e2e8f0;
+            border-radius: 18px;
+            padding: 1.1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            align-items: center;
+            text-align: center;
+            color: #1e293b;
+        }
+
+        .fpv-help-card strong {
+            font-size: 1rem;
+            font-weight: 600;
+            display: block;
+        }
+
+        .fpv-help-keys {
+            display: inline-flex;
+            gap: 0.35rem;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .fpv-key {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 38px;
+            min-height: 38px;
+            padding: 0.4rem 0.75rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: inset 0 -2px 0 rgba(148, 163, 184, 0.4);
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .fpv-help-footer {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .fpv-help-footer button {
+            padding: 0.65rem 1.6rem;
+            border-radius: 999px;
+            box-shadow: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .fpv-help-footer button.secondary {
+            background: rgba(100, 116, 139, 0.25);
+            color: #1e293b;
+        }
+
+        .fpv-help-footer button:not(.secondary) {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .controls-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            backdrop-filter: blur(10px);
+            min-width: 280px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 900;
+            transition: all 0.3s ease;
+        }
+
+        .file-upload {
+            background: rgba(255, 255, 255, 0.95);
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            backdrop-filter: blur(10px);
+            z-index: 900;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            z-index: 1000;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-container {
+            margin-top: 1rem;
+            width: 300px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background-color: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: 0.85rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .ifc-controls {
+            border-top: 2px solid #e2e8f0;
+            padding-top: 1rem;
+            margin-top: 1rem;
+        }
+
+        .cesium-controls {
+            border-top: 2px solid #e2e8f0;
+            padding-top: 1rem;
+            margin-top: 1rem;
+        }
+
+        .control-group {
+            margin-bottom: 1rem;
+        }
+
+        .control-label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #374151;
+        }
+
+        .control-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+
+        /* הדגשת מקשי קיצור */
+        kbd {
+            display: inline-block;
+            padding: 2px 6px;
+            background-color: #f4f4f4;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.8em;
+            color: #333;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+        }
+
+        .status-info {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+
+        /* כלים מתקדמים */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 0.5rem;
+            margin: 0.5rem 0;
+        }
+
+        .tool-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.75rem;
+            min-height: 60px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .tool-btn:hover {
+            background: #f8fafc;
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .tool-btn .tool-icon {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+
+        .advanced-controls {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            margin: 0.5rem 0;
+        }
+
+        .control-group label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+
+        .control-group span {
+            font-size: 0.75rem;
+            color: #6b7280;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>צופה מאוחד - IFC ו-3D Tiles</h1>
+    </div>
+
+    <div class="mode-selector">
+        <button class="mode-btn active" data-mode="hybrid">צפייה משולבת</button>
+        <button class="mode-btn" data-mode="ifc">IFC בלבד</button>
+        <button class="mode-btn" data-mode="tiles">3D Tiles בלבד</button>
+    </div>
+
+    <div class="viewer-container">
+        <canvas id="renderCanvas"></canvas>
+        
+        <div class="file-upload">
+            <input type="file" id="fileInput" accept=".ifc,.json" style="display: none;">
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click();">
+                <i class="fas fa-upload"></i> העלה IFC
+            </button>
+            <button class="upload-btn" onclick="unifiedViewer.loadS3Tiles()" style="margin-top: 0.5rem; background: #059669;">
+                <i class="fas fa-cube"></i> טען 3D Tiles
+            </button>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #666;">
+                תמיכה ב-IFC ו-JSON (3D Tiles)
+            </div>
+        </div>
+
+        <div class="controls-panel">
+            <h3 style="margin: 0 0 1rem 0; color: #374151;">בקרות תצוגה</h3>
+            
+            <!-- General Controls -->
+            <div class="control-group">
+                <label class="control-label">מצב צפייה:</label>
+                <select id="viewMode" class="control-input">
+                    <option value="orbit">מסביב לאובייקט</option>
+                    <option value="fly">טיסה חופשית</option>
+                    <option value="walk">הליכה</option>
+                </select>
+            </div>
+
+            <!-- IFC Controls -->
+            <div class="ifc-controls" id="ifcControls">
+                <h4 style="margin: 0 0 0.5rem 0; color: #667eea;">🏗️ כלי IFC מתקדמים</h4>
+                
+                <!-- כלים מהירים -->
+                <div class="tools-grid">
+                    <button onclick="unifiedViewer.toggleIfcProperties()" class="tool-btn" title="הצג/הסתר מאפיינים">
+                        <span class="tool-icon">📋</span>
+                        מאפיינים
+                    </button>
+                    <button onclick="unifiedViewer.ifcMeasureTool()" class="tool-btn" title="כלי מדידה">
+                        <span class="tool-icon">📏</span>
+                        מדידה
+                    </button>
+                    <button onclick="unifiedViewer.toggleTransparencyOverlay()" class="tool-btn" title="שקיפות מודל">
+                        <span class="tool-icon">🌟</span>
+                        שקיפות
+                    </button>
+                    <button onclick="unifiedViewer.toggleSectionMode()" class="tool-btn" title="כלי חתך תלת-ממדי">
+                        <span class="tool-icon">✂️</span>
+                        חתך תלת-ממדי
+                    </button>
+                    <button onclick="unifiedViewer.ifcStoreyView()" class="tool-btn" title="תצוגת קומות">
+                        <span class="tool-icon">🏢</span>
+                        קומות
+                    </button>
+                    <button onclick="unifiedViewer.toggleFirstPersonMode()" class="tool-btn" title="ניווט WASDQE">
+                        <span class="tool-icon">🚶</span>
+                        ניווט
+                    </button>
+                    <button onclick="unifiedViewer.showNavigationHelp()" class="tool-btn" title="עזרה - מקשי קיצור">
+                        <span class="tool-icon">❓</span>
+                        עזרה
+                    </button>
+                    <button onclick="unifiedViewer.clearMeasurements()" class="tool-btn" title="ניקוי מדידות">
+                        <span class="tool-icon">🧹</span>
+                        נקה
+                    </button>
+                    <button onclick="unifiedViewer.ifcScreenshot()" class="tool-btn" title="צילום מסך">
+                        <span class="tool-icon">📸</span>
+                        צילום
+                    </button>
+                    <button onclick="unifiedViewer.ifcExportJSON()" class="tool-btn" title="ייצוא JSON">
+                        <span class="tool-icon">🗂️</span>
+                        JSON
+                    </button>
+                </div>
+
+                <!-- בקרות מתקדמות -->
+                <div class="advanced-controls">
+                    <div class="control-group">
+                        <label>שקיפות IFC:</label>
+                        <input type="range" id="ifcOpacity" min="0" max="1" step="0.1" value="1" onchange="unifiedViewer.setIfcOpacity(this.value)">
+                        <span id="ifcOpacityValue">100%</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label>מצב צבע:</label>
+                        <select id="ifcColorMode" onchange="unifiedViewer.setIFCColorMode(this.value)">
+                            <option value="material">חומר מקורי</option>
+                            <option value="type">לפי סוג</option>
+                            <option value="floor">לפי קומה</option>
+                            <option value="element">לפי אלמנט</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cesium/3D Tiles Controls -->
+            <div class="cesium-controls" id="cesiumControls">
+            <div class="control-group">
+                <label>איכות רינדור 3D Tiles</label>
+                <input type="range" id="tilesQuality" min="0" max="100" step="1" value="75">
+                <span>קרטוע ↔︎ חד</span>
+            </div>
+
+                <h4 style="margin: 0 0 0.5rem 0; color: #764ba2;">🌐 כלי 3D Tiles מתקדמים</h4>
+                
+                <!-- כלים מהירים -->
+                <div class="tools-grid">
+                    <button onclick="unifiedViewer.tilesWireframe()" class="tool-btn" title="מצב wireframe">
+                        <span class="tool-icon">🔲</span>
+                        Wireframe
+                    </button>
+                    <button onclick="unifiedViewer.tilesExportKML()" class="tool-btn" title="ייצוא KML">
+                        <span class="tool-icon">🗺️</span>
+                        KML
+                    </button>
+                    <button onclick="unifiedViewer.tilesShare()" class="tool-btn" title="שיתוף">
+                        <span class="tool-icon">🔗</span>
+                        שיתוף
+                    </button>
+                    <button onclick="unifiedViewer.tilesAnalyze()" class="tool-btn" title="ניתוח נתונים">
+                        <span class="tool-icon">📊</span>
+                        ניתוח
+                    </button>
+                    <button onclick="unifiedViewer.resetCameraView()" class="tool-btn" title="איפוס מצלמה">
+                        <span class="tool-icon">🎯</span>
+                        איפוס
+                    </button>
+                    <button onclick="unifiedViewer.centerCameraOnTiles()" class="tool-btn" title="הצג 3D Tiles במרכז המסך">
+                        <span class="tool-icon">�</span>
+                        מרכז במסך
+                    </button>
+                </div>
+
+                <!-- בקרות מתקדמות -->
+                <div class="advanced-controls">
+                    <div class="control-group">
+                        <label>שקיפות Tiles:</label>
+                        <input type="range" id="tilesetOpacity" min="0" max="1" step="0.1" value="1" onchange="unifiedViewer.setTilesOpacity(this.value)">
+                        <span id="tilesOpacityValue">100%</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label>רמת פירוט (LOD):</label>
+                        <input type="range" id="tilesLOD" min="0" max="5" step="1" value="3" onchange="unifiedViewer.setTilesLOD(this.value)">
+                        <span id="lodValue">רמה 3</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label>גובה מודל:</label>
+                        <input type="range" id="tilesHeight" min="-100" max="500" step="10" value="0" onchange="unifiedViewer.setTilesHeight(this.value)">
+                        <span id="heightValue">0 מטר</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-info">
+                <strong>מצב נוכחי:</strong> <span id="currentStatus">מוכן</span><br>
+                <strong>קבצים טעונים:</strong> <span id="loadedFiles">0</span>
+            </div>
+        </div>
+
+        <div class="loading-indicator hidden" id="loadingIndicator">
+            <div class="spinner"></div>
+            <div id="loadingMessage">טוען קובץ...</div>
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FPV Help Modal -->
+    <div class="fpv-help-backdrop" id="fpvHelp" hidden>
+        <div class="fpv-help-modal" role="dialog" aria-modal="true" aria-labelledby="fpvHelpTitle">
+            <button type="button" class="fpv-help-close" id="fpvHelpClose" aria-label="סגירת מדריך">✕</button>
+            <h3 class="fpv-help-title" id="fpvHelpTitle">ניווט במצב הליכה</h3>
+            <div class="fpv-help-grid">
+                <div class="fpv-help-card">
+                    <strong>הליכה</strong>
+                    <div class="fpv-help-keys">
+                        <span class="fpv-key">W</span>
+                        <span class="fpv-key">A</span>
+                        <span class="fpv-key">S</span>
+                        <span class="fpv-key">D</span>
+                    </div>
+                    <span>או חיצים</span>
+                </div>
+                <div class="fpv-help-card">
+                    <strong>עלייה / ירידה</strong>
+                    <div class="fpv-help-keys">
+                        <span class="fpv-key">E</span>
+                        <span class="fpv-key">Q</span>
+                    </div>
+                    <span>למעלה ולמטה</span>
+                </div>
+                <div class="fpv-help-card">
+                    <strong>ריצה</strong>
+                    <div class="fpv-help-keys">
+                        <span class="fpv-key">Shift</span>
+                    </div>
+                    <span>החזיקו יחד עם כיוון</span>
+                </div>
+                <div class="fpv-help-card">
+                    <strong>מהירות</strong>
+                    <div class="fpv-help-keys">
+                        <span class="fpv-key">+</span>
+                        <span class="fpv-key">-</span>
+                    </div>
+                    <span>התאימו מהירות תנועה</span>
+                </div>
+                <div class="fpv-help-card">
+                    <strong>מבט סביב</strong>
+                    <div>גררו עם העכבר</div>
+                </div>
+                <div class="fpv-help-card">
+                    <strong>יציאה</strong>
+                    <div class="fpv-help-keys">
+                        <span class="fpv-key">ESC</span>
+                    </div>
+                    <span>חזרה למצב עכבר</span>
+                </div>
+            </div>
+            <div class="fpv-help-footer">
+                <button type="button" class="secondary" id="fpvHelpDismiss">אל תציגו שוב</button>
+                <button type="button" id="fpvHelpConfirm">בסדר, הבנתי</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main JS entry point - Vite will handle bundling -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>בדיקת טעינה - Skylens 3D Tiles</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f7fa;
+            direction: rtl;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        .test-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+        .test-btn:hover {
+            transform: translateY(-2px);
+        }
+        .log {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 15px;
+            white-space: pre-wrap;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 בדיקת טעינת Skylens 3D Tiles</h1>
+        
+        <div class="test-section">
+            <h3>🌐 בדיקת חיבור לשרת S3</h3>
+            <p>קישור: <code>https://3d-models-skylens.s3.eu-central-1.amazonaws.com/Production_1_3dtiles_milman/Scene/Production_1_3dtiles_milman.json</code></p>
+            
+            <button class="test-btn" onclick="switchToSano()">🔄 Sano Tiles</button>
+            <button class="test-btn" onclick="switchToMilman()">🔄 Milman Tiles</button>
+            <br>
+            <button class="test-btn" onclick="testS3Connection()">בדוק חיבור S3</button>
+            <button class="test-btn" onclick="testFileSize()">בדוק גודל קובץ</button>
+            <button class="test-btn" onclick="testTilesetStructure()">בחן מבנה Tileset</button>
+            <button class="test-btn" onclick="testTransforms()">בחן Transforms</button>
+            <button class="test-btn" onclick="testB3DMFiles()">🧪 בדוק B3DM</button>
+            <button class="test-btn" onclick="loadInViewer()">טען בצופה</button>
+            
+            <div id="status" class="status" style="display: none;"></div>
+            <div id="log" class="log"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 מידע על הטעינה</h3>
+            <div id="info" style="font-family: monospace; background: #f8f9fa; padding: 15px; border-radius: 6px;">
+                מוכן לבדיקה...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SANO_URL = 'https://3d-models-skylens.s3.eu-central-1.amazonaws.com/Sano_3dtiles/Scene/Production_4_3dtiles.json';
+        const MILMAN_URL = 'https://3d-models-skylens.s3.eu-central-1.amazonaws.com/Production_1_3dtiles_milman/Scene/Production_1_3dtiles_milman.json';
+        
+        let currentUrl = SANO_URL; // Default to Sano
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('log');
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '🔄';
+            logElement.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(message);
+        }
+        
+        function setStatus(message, type) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+            statusElement.style.display = 'block';
+        }
+        
+        function updateInfo(info) {
+            document.getElementById('info').innerHTML = info;
+        }
+        
+        async function testS3Connection() {
+            log(`מתחיל בדיקת חיבור לS3 (${currentUrl.includes('Sano') ? 'Sano' : 'Milman'})...`);
+            setStatus('בודק חיבור לשרת S3...', 'loading');
+            
+            try {
+                const response = await fetch(currentUrl, { method: 'HEAD' });
+                
+                if (response.ok) {
+                    log('חיבור לS3 הצליח!', 'success');
+                    setStatus('חיבור לS3 הצליח! ✅', 'success');
+                    
+                    const headers = {};
+                    for (let [key, value] of response.headers.entries()) {
+                        headers[key] = value;
+                    }
+                    
+                    updateInfo(`
+                        <strong>מצב:</strong> ${response.status} ${response.statusText}<br>
+                        <strong>Content-Type:</strong> ${headers['content-type'] || 'לא זמין'}<br>
+                        <strong>Content-Length:</strong> ${headers['content-length'] ? (parseInt(headers['content-length']) / 1024).toFixed(1) + ' KB' : 'לא זמין'}<br>
+                        <strong>Last-Modified:</strong> ${headers['last-modified'] || 'לא זמין'}<br>
+                        <strong>ETag:</strong> ${headers['etag'] || 'לא זמין'}
+                    `);
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                log(`שגיאה בחיבור לS3: ${error.message}`, 'error');
+                setStatus(`שגיאה: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testFileSize() {
+            log('בודק גודל קובץ...');
+            setStatus('בודק גודל קובץ...', 'loading');
+            
+            try {
+                const response = await fetch(currentUrl);
+                const text = await response.text();
+                const sizeKB = (text.length / 1024).toFixed(1);
+                
+                log(`גודל קובץ JSON: ${sizeKB} KB`, 'success');
+                setStatus(`גודל קובץ: ${sizeKB} KB`, 'success');
+                
+                // Try to parse JSON
+                const tileset = JSON.parse(text);
+                log('קובץ JSON תקין ונטען בהצלחה!', 'success');
+                
+                updateInfo(`
+                    <strong>גודל קובץ:</strong> ${sizeKB} KB<br>
+                    <strong>Version:</strong> ${tileset.version || 'לא זמין'}<br>
+                    <strong>Asset Version:</strong> ${tileset.asset?.version || 'לא זמין'}<br>
+                    <strong>Root Geometric Error:</strong> ${tileset.root?.geometricError || 'לא זמין'}<br>
+                    <strong>Root Transform:</strong> ${tileset.root?.transform ? 'כן' : 'לא'}<br>
+                    <strong>Root Children:</strong> ${tileset.root?.children?.length || 0}
+                `);
+                
+            } catch (error) {
+                log(`שגיאה בבדיקת גודל: ${error.message}`, 'error');
+                setStatus(`שגיאה: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testTilesetStructure() {
+            log('בוחן מבנה Tileset...');
+            setStatus('בוחן מבנה Tileset...', 'loading');
+            
+            try {
+                const response = await fetch(currentUrl);
+                const tileset = await response.json();
+                
+                function countTiles(tile, level = 0) {
+                    let count = 1;
+                    if (tile.children) {
+                        for (const child of tile.children) {
+                            count += countTiles(child, level + 1);
+                        }
+                    }
+                    return count;
+                }
+                
+                const totalTiles = countTiles(tileset.root);
+                
+                log(`מבנה Tileset נבחן בהצלחה!`, 'success');
+                log(`סך הכל ${totalTiles} tiles במבנה`, 'info');
+                setStatus(`נמצאו ${totalTiles} tiles`, 'success');
+                
+                // Analyze first few levels
+                let analysis = `<strong>ניתוח מבנה:</strong><br>`;
+                analysis += `סך tiles: ${totalTiles}<br>`;
+                analysis += `Geometric Error: ${tileset.root.geometricError}<br>`;
+                
+                if (tileset.root.content) {
+                    analysis += `Root Content URI: ${tileset.root.content.uri}<br>`;
+                }
+                
+                if (tileset.root.children) {
+                    analysis += `Root Children: ${tileset.root.children.length}<br>`;
+                    tileset.root.children.slice(0, 3).forEach((child, i) => {
+                        analysis += `└─ Child ${i+1}: Error=${child.geometricError}, Content=${child.content ? '✓' : '✗'}<br>`;
+                    });
+                }
+                
+                updateInfo(analysis);
+                
+            } catch (error) {
+                log(`שגיאה בניתוח מבנה: ${error.message}`, 'error');
+                setStatus(`שגיאה: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testTransforms() {
+            log('בוחן טרנספורמציות Tiles...');
+            setStatus('בוחן transforms...', 'loading');
+            
+            try {
+                const response = await fetch(currentUrl);
+                const tileset = await response.json();
+                
+                function analyzeTransforms(tile, level = 0, path = 'root') {
+                    let transforms = [];
+                    
+                    if (tile.transform) {
+                        transforms.push({
+                            path,
+                            level,
+                            transform: tile.transform,
+                            hasContent: !!tile.content,
+                            contentUri: tile.content?.uri || 'none'
+                        });
+                    }
+                    
+                    if (tile.children) {
+                        tile.children.forEach((child, i) => {
+                            transforms.push(...analyzeTransforms(child, level + 1, `${path}.children[${i}]`));
+                        });
+                    }
+                    
+                    return transforms;
+                }
+                
+                const transforms = analyzeTransforms(tileset.root);
+                
+                log(`נמצאו ${transforms.length} טרנספורמציות`, 'success');
+                setStatus(`נמצאו ${transforms.length} transforms`, 'success');
+                
+                let analysis = `<strong>ניתוח Transforms:</strong><br>`;
+                analysis += `סך טרנספורמציות: ${transforms.length}<br><br>`;
+                
+                transforms.slice(0, 5).forEach((t, i) => {
+                    analysis += `<strong>Transform ${i+1}:</strong><br>`;
+                    analysis += `Path: ${t.path}<br>`;
+                    analysis += `Level: ${t.level}<br>`;
+                    analysis += `Matrix: [${t.transform.slice(0, 4).map(v => v.toFixed(2)).join(', ')}...]<br>`;
+                    analysis += `Content: ${t.contentUri}<br><br>`;
+                });
+                
+                if (transforms.length > 5) {
+                    analysis += `... ועוד ${transforms.length - 5} transforms`;
+                }
+                
+                updateInfo(analysis);
+                
+            } catch (error) {
+                log(`שגיאה בניתוח transforms: ${error.message}`, 'error');
+                setStatus(`שגיאה: ${error.message}`, 'error');
+            }
+        }
+        
+        function switchToSano() {
+            currentUrl = SANO_URL;
+            log('🔄 החלפה ל-Sano 3D Tiles');
+            updateInfo(`<strong>URL נוכחי:</strong> Sano 3D Tiles<br>${SANO_URL}`);
+            setStatus('Sano 3D Tiles נבחר', 'success');
+        }
+        
+        function switchToMilman() {
+            currentUrl = MILMAN_URL;
+            log('🔄 החלפה ל-Milman 3D Tiles');
+            updateInfo(`<strong>URL נוכחי:</strong> Milman 3D Tiles<br>${MILMAN_URL}`);
+            setStatus('Milman 3D Tiles נבחר', 'success');
+        }
+        
+        async function testB3DMFiles() {
+            log('🧪 בודק קבצי B3DM...');
+            setStatus('בודק B3DM files...', 'loading');
+            
+            try {
+                const response = await fetch(currentUrl);
+                const tileset = await response.json();
+                
+                log(`📋 בוחן tileset: ${currentUrl.includes('Sano') ? 'Sano' : 'Milman'}`);
+                
+                // Find first few content URIs
+                const contentUrls = [];
+                
+                function findContent(tile, basePath, level = 0) {
+                    if (level > 2) return; // Limit depth
+                    
+                    if (tile.content?.uri) {
+                        const fullUrl = new URL(tile.content.uri, basePath).href;
+                        contentUrls.push({
+                            uri: tile.content.uri,
+                            fullUrl: fullUrl,
+                            level: level
+                        });
+                    }
+                    
+                    if (tile.children) {
+                        tile.children.forEach(child => findContent(child, basePath, level + 1));
+                    }
+                }
+                
+                const basePath = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1);
+                findContent(tileset.root, basePath);
+                
+                log(`🔍 נמצאו ${contentUrls.length} קבצי תוכן`);
+                
+                // Test first few B3DM files
+                let successCount = 0;
+                let failCount = 0;
+                
+                for (let i = 0; i < Math.min(3, contentUrls.length); i++) {
+                    const content = contentUrls[i];
+                    log(`🔄 בודק ${content.uri}...`);
+                    
+                    try {
+                        const testResponse = await fetch(content.fullUrl, { method: 'HEAD' });
+                        if (testResponse.ok) {
+                            const size = testResponse.headers.get('content-length');
+                            log(`✅ ${content.uri} - ${size ? (parseInt(size)/1024).toFixed(1) + 'KB' : 'גודל לא ידוע'}`);
+                            successCount++;
+                        } else {
+                            log(`❌ ${content.uri} - HTTP ${testResponse.status}`);
+                            failCount++;
+                        }
+                    } catch (error) {
+                        log(`❌ ${content.uri} - שגיאה: ${error.message}`);
+                        failCount++;
+                    }
+                    
+                    // Small delay between requests
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                const summary = `תוצאות: ${successCount} הצליחו, ${failCount} נכשלו מתוך ${Math.min(3, contentUrls.length)} שנבדקו`;
+                log(summary);
+                
+                if (failCount > 0) {
+                    setStatus(`⚠️ יש בעיות עם קבצי B3DM - ${failCount} כשלונות`, 'error');
+                } else {
+                    setStatus(`✅ כל קבצי B3DM נגישים`, 'success');
+                }
+                
+            } catch (error) {
+                log(`❌ שגיאה בבדיקת B3DM: ${error.message}`, 'error');
+                setStatus(`שגיאה: ${error.message}`, 'error');
+            }
+        }
+        
+        function loadInViewer() {
+            log('מעביר לצופה הראשי...');
+            window.open(`./index.html`, '_blank');
+            setStatus('נפתח בצופה הראשי', 'success');
+        }
+        
+        // Initialize
+        log('מוכן לבדיקות');
+        setStatus('מוכן לבדיקות', 'success');
+    </script>
+</body>
+</html>

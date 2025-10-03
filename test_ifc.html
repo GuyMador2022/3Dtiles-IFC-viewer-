@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IFC Viewer Test</title>
+    <script src="https://unpkg.com/three@0.135.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.135.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/web-ifc-three@0.0.126/IFCLoader.js"></script>
+</head>
+<body style="margin: 0; padding: 20px; font-family: Arial;">
+    <h3>בדיקת IFC Loader</h3>
+    <input type="file" id="fileInput" accept=".ifc" />
+    <div id="status" style="margin: 10px 0; padding: 10px; background: #f0f0f0;"></div>
+    <canvas id="three-canvas" style="width: 100%; height: 500px; border: 1px solid #ccc;"></canvas>
+    
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(10, 10, 10);
+        
+        const canvas = document.getElementById('three-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas });
+        renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+        
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 50);
+        scene.add(directionalLight);
+        
+        // IFC Loader setup
+        const ifcLoader = new THREE.IFCLoader();
+        const status = document.getElementById('status');
+        
+        async function initIFCLoader() {
+            try {
+                status.textContent = 'מאתחל IFC Loader...';
+                console.log('🔧 Initializing IFC Loader...');
+                
+                ifcLoader.ifcManager.setWasmPath('https://unpkg.com/web-ifc@0.0.53/');
+                
+                console.log('🔍 Available methods:', Object.getOwnPropertyNames(ifcLoader.ifcManager));
+                
+                // Try different initialization methods
+                if (typeof ifcLoader.ifcManager.init === 'function') {
+                    console.log('⏳ Using init() method...');
+                    await ifcLoader.ifcManager.init();
+                } else if (typeof ifcLoader.ifcManager.applyWebIfcConfig === 'function') {
+                    console.log('⏳ Using applyWebIfcConfig() method...');
+                    await ifcLoader.ifcManager.applyWebIfcConfig({});
+                } else {
+                    console.log('⏳ Basic setup only...');
+                    // Just basic setup
+                }
+                
+                console.log('✅ IFC Loader ready');
+                status.textContent = 'מוכן - בחרו קובץ IFC';
+                status.style.background = '#d4edda';
+                
+                return true;
+            } catch (error) {
+                console.error('❌ Error initializing IFC Loader:', error);
+                status.textContent = 'שגיאה: ' + error.message;
+                status.style.background = '#f8d7da';
+                return false;
+            }
+        }
+        
+        // File handling
+        document.getElementById('fileInput').addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            try {
+                status.textContent = 'טוען קובץ IFC...';
+                status.style.background = '#fff3cd';
+                
+                const url = URL.createObjectURL(file);
+                console.log('📁 Loading IFC file:', file.name);
+                
+                const ifcModel = await ifcLoader.loadAsync(url);
+                console.log('✅ IFC model loaded:', ifcModel);
+                
+                // Add to scene
+                scene.add(ifcModel);
+                
+                // Focus camera on model
+                const box = new THREE.Box3().setFromObject(ifcModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const fov = camera.fov * (Math.PI / 180);
+                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                
+                camera.position.set(center.x + cameraZ, center.y + cameraZ, center.z + cameraZ);
+                camera.lookAt(center);
+                controls.target.copy(center);
+                controls.update();
+                
+                status.textContent = 'קובץ IFC נטען בהצלחה!';
+                status.style.background = '#d4edda';
+                
+                URL.revokeObjectURL(url);
+                
+            } catch (error) {
+                console.error('❌ Error loading IFC:', error);
+                status.textContent = 'שגיאה בטעינת IFC: ' + error.message;
+                status.style.background = '#f8d7da';
+            }
+        });
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // Initialize and start
+        initIFCLoader().then(() => {
+            animate();
+        });
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            const width = canvas.offsetWidth;
+            const height = canvas.offsetHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+    </script>
+</body>
+</html>

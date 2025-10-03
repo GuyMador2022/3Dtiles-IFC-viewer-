@@ -1,0 +1,2 @@
+*.b3dm filter=lfs diff=lfs merge=lfs -text
+*.ifc filter=lfs diff=lfs merge=lfs -text
