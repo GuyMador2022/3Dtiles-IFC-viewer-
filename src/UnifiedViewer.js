@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { IFCLoader } from 'web-ifc-three/IFCLoader';
+import { IFCLoader } from 'web-ifc-three';
 import ThreeDTilesLoader from './loaders/ThreeDTilesLoader.js';
 
 export default class UnifiedViewer {
