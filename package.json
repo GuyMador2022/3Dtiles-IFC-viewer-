@@ -18,8 +18,8 @@
     "vite": "^5.1.0"
   },
   "dependencies": {
-    "three": "^0.135.0",
-    "web-ifc-three": "^0.0.100"
+    "three": "^0.149.0",
+    "web-ifc-three": "^0.0.126"
   },
   "keywords": [
     "3d",
